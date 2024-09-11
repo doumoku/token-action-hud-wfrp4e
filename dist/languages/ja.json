@@ -1,6 +1,7 @@
 {
   "tokenActionHud": {
     "wfrp4e": {
+      "advantage": "優位",
       "ammunition": "矢弾",
       "armour": "鎧",
       "basic": "基本",
@@ -12,9 +13,12 @@
       "consumables": "消耗品",
       "containers": "容器",
       "extendedTests": "継続テスト",
+      "grimoires": "魔導書",
       "inventory": "ｲﾝﾍﾞﾝﾄﾘ",
       "item": "ｱｲﾃﾑ",
       "magic": "魔法",
+      "manualEffects": "手動効果",
+      "testIndependentEffects": "テスト独自効果",
       "prayersBlessings": "祝福",
       "prayersMiracles": "奇跡",
       "scrolls": "Magic Scrolls",
@@ -25,7 +29,7 @@
       "spellsArcane": "秘術呪文",
       "spellsPetty": "初級呪文",
       "talents": "異能",
-      "token": "ﾄｰｸﾝ",
+      "token": "コマ",
       "traits": "ｸﾘｰﾁｬｰ特徴",
       "trappings": "所持品",
       "utility": "効果",
@@ -40,7 +44,15 @@
         "checkCareer": "キャリアの進捗を確認",
         "checkEquipment": "装備品を確認",
         "restRecover": "休息",
-        "incomeRoll": "収入テスト"
+        "incomeRoll": "収入テスト",
+
+        "advantage": {
+          "batter": "Batter",
+          "trick": "Trick",
+          "additionalEffort": "Additional Effort",
+          "fleeFromHarm": "危害から逃れる／Flee from Harm",
+          "additionalAction": "Additional Action"
+        }
       },
 
       "tooltips": {
@@ -53,6 +65,9 @@
         "ExtendedTestTarget": "現在 SL / 目標 SL",
         "HighestAP": "最高AP",
         "ManualInvoke": "効果呼び出し",
+        "ManualInvokeTarget": "Invoke Target Effect",
+        "ManualInvokeArea": "Invoke Area Effect",
+        "Radius": "Invoke Area Radius",
         "Quantity": "個数",
         "Shield": "シールド",
         "Skill": "テストした技能",
@@ -63,6 +78,28 @@
         "WeaponDamage": "武器ダメージ"
       },
 
+      "groupAdvantage": {
+        "CannotUse": "「{action}」アクションが使えません。使用には{cost}優位が必要ですが、あなたは{advantage}優位しかありません。",
+        "GroupAdvantage": "グループ優位",
+
+        "Batter": {
+          "DefenderWon": "Defender won the <em>Batter</em>!",
+          "AttackerWon": "Attacker won the <em>Batter</em> and applied <b>Prone</b> to their enemy!",
+          "DefenderAdvantage": "Defender gains 1 Advantage."
+        },
+
+        "Trick": {
+          "DefenderWon": "Defender won the <em>Trick</em> and gains 1 Advantage!",
+          "AttackerWon": "Attacker won the <em>Trick</em> and gains 1 Advantage! Additionally, if GM allows, they can apply a single Condition of choice to the enemy: @Condition[ablaze]{Ablaze}, @Condition[blinded]{Blinded} or @Condition[entangled]{Entangled}."
+        },
+
+        "AdditionalEffort": {
+          "DialogText": "Select how much Advantage you want to use. You can use any integer value between {min} and {max}.",
+          "DialogTitle": "How much Advantage to use?",
+          "CantSpendLess": "Cannot spend less Advantage on Additional Effort than minimum!"
+        }
+      },
+      
       "settings": {
         "shiftRollMode": {
           "name": "Shiftロールモード",
@@ -71,6 +108,10 @@
         "bypassDefault": {
           "name": "デフォルトでバイパスモード",
           "hint": "チェックすると、すべてのロールが規定でバイパスされます。チェックを外すと、すべてのロールが規定でダイアログを表示します。Altキーで挙動を逆にします (例として、チェックを外してAlt押下中はロールをバイパスさせます)。"
+        },
+        "advantageDesc": {
+          "name": "Show Advantage Descriptions",
+          "hint": "If checked, Group Advantage actions triggered via TAH will post their full descriptions to Chat. Using Group Advantage requires installed and enabled Up in Arms module."
         },
         "displayUnequipped": {
           "name": "未装備品を表示",
