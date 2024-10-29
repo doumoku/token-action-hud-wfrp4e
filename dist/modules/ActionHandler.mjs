@@ -1,6 +1,7 @@
 import Utility from "./utility/Utility.mjs";
 import {constants, settings, tah} from "./constants.mjs";
 import GroupAdvantage from "./GroupAdvantage.js";
+import {awardXP, testOptions} from "./actionHelpers.mjs";
 
 export let ActionHandlerWfrp4e = null
 
@@ -11,6 +12,7 @@ Hooks.once('tokenActionHudCoreApiReady', async (coreModule) => {
    */
   ActionHandlerWfrp4e = class ActionHandlerWfrp4e extends coreModule.api.ActionHandler {
     static #firstBuild = true;
+
     /**
      * Build system actions
      * Called by Token Action HUD Core
@@ -29,9 +31,9 @@ Hooks.once('tokenActionHudCoreApiReady', async (coreModule) => {
 
     #findGroup(data = {}) {
       if (data?.nestId) {
-        return this.groups[data.nestId]
+        return this.groupHandler.groups[data.nestId]
       } else {
-        return Object.values(this.groups).find(
+        return Object.values(this.groupHandler.groups).find(
           group =>
             (!data.id || group.id === data.id) &&
             (!data.type || group.type === data.type) &&
@@ -185,6 +187,12 @@ Hooks.once('tokenActionHudCoreApiReady', async (coreModule) => {
      * @returns {object}
      */
     async #buildMultipleTokenActions() {
+      await this.#buildCharacteristics();
+      await this.#buildMultipleBasicSkills();
+      await this.#buildMultipleExtendedTests();
+      await this.#buildCombatBasic();
+      await this.#buildConditions();
+      await this.#buildUtility();
     }
 
     async #buildCharacteristics() {
@@ -195,19 +203,22 @@ Hooks.once('tokenActionHudCoreApiReady', async (coreModule) => {
         let name = WFRP4E.characteristics[characteristic];
         let actionTypeName = game.i18n.localize(tah.actions.characteristic);
         let listName = `${actionTypeName ? `${actionTypeName}: ` : ''}${name}`;
-        let encodedValue = ['characteristic', characteristic].join(this.delimiter);
-        let info1 = {
+        let info1 = this.actor ? {
           class: '',
           text: this.actor.characteristics[characteristic].value,
           title: game.i18n.localize('tokenActionHud.wfrp4e.tooltips.CharacteristicValue')
-        };
+        } : '';
 
         actions.push({
           id: characteristic,
           name,
           listName,
-          encodedValue,
-          info1
+          info1,
+          onClick: () => {
+            for (const actor of this.actors) {
+              actor.setupCharacteristic(characteristic, testOptions()).then(test => test.roll());
+            }
+          }
         });
       }
 
@@ -240,6 +251,43 @@ Hooks.once('tokenActionHudCoreApiReady', async (coreModule) => {
       return this.#addActionsFromMap(actionTypeId, inventoryMap);
     };
 
+    async #buildMultipleBasicSkills() {
+      const skills = this.actors[0]?.itemTypes.skill || [];
+      const actionTypeId = 'skill';
+      const actions = [];
+      const type = 'skillBasic';
+
+      const groupId = tah.items[type]?.groupId ?? this.#findGroup({id: type})?.id;
+      if (!groupId) return;
+      const groupData = {id: groupId, type: 'system'};
+
+      for (let skill of skills) {
+        const actionTypeName = game.i18n.localize(tah.actions[actionTypeId]);
+
+        if (!this.actors.every(a => a.itemTypes.skill.find(s => s.name === skill.name)))
+          continue;
+
+        actions.push({
+          id: skill.id,
+          name: this.#getActionName(skill.name),
+          img: coreModule.api.Utils.getImage(skill),
+          listName: `${actionTypeName ? `${actionTypeName}: ` : ''}${skill.name}`,
+          tooltip: game.wfrp4e.config.characteristics[skill.system.characteristic.value],
+          onClick: () => {
+            for (const actor of this.actors) {
+              let skillToUse = actor.itemTypes.skill.find(s => s.name === skill.name);
+              let options = testOptions();
+
+              if (skillToUse)
+                actor.setupSkill(skillToUse, options).then(test => test.roll());
+            }
+          }
+        })
+      }
+
+      this.addActions(actions, groupData);
+    };
+
     async #buildExtendedTests() {
       if (this.extended.size === 0) return;
       const actions = [];
@@ -251,6 +299,54 @@ Hooks.once('tokenActionHudCoreApiReady', async (coreModule) => {
         if (item.system.hide.test && !game.user.isGM) continue;
         let action = this.#makeActionFromItem(item, actionTypeName, actionType, {}, [], false);
         actions.push(action);
+      }
+
+      await this.addActions(actions, groupData);
+    };
+
+    async #buildMultipleExtendedTests() {
+      const tests = this.actors[0]?.itemTypes.extendedTest || [];
+      const actions = [];
+      const actionTypeName = 'Extended Test';
+      const groupData = tah.groups.extendedTests;
+
+      for (let item of tests) {
+        if (item.system.hide.test && !game.user.isGM) continue;
+
+        if (!this.actors.every(a => a.itemTypes.extendedTest.find(s => s.name === item.name)))
+          continue;
+
+        actions.push({
+          id: item._id,
+          name: this.#getActionName(item.name),
+          img: null,
+          listName: `${actionTypeName ? `${actionTypeName}: ` : ''}${item.name}`,
+          info1: {
+            class: '',
+            text: this.#getTestTarget(item),
+            title: game.i18n.localize('tokenActionHud.wfrp4e.tooltips.TestTarget')
+          },
+          info2: {
+            class: '',
+            text: this.#getItemValue(item),
+            title: this.#getItemValueTooltip(item)
+          },
+          info3: {
+            class: '',
+            text: this.#getItemSecondaryValue(item),
+            title: this.#getItemSecondaryValueTooltip(item)
+          },
+          tooltip: item.name,
+          onClick: () => {
+            for (const actor of this.actors) {
+              let extendedTest = actor.itemTypes.extendedTest.find(e => e.name === item.name);
+              let options = testOptions();
+
+              if (extendedTest)
+                actor.setupExtendedTest(extendedTest, options);
+            }
+          }
+        });
       }
 
       await this.addActions(actions, groupData);
@@ -305,18 +401,41 @@ Hooks.once('tokenActionHudCoreApiReady', async (coreModule) => {
         {
           name: game.i18n.localize('SHEET.Unarmed'),
           value: 'unarmed',
+          onClick: () => {
+            let unarmed = game.wfrp4e.config.systemItems.unarmed;
+            for (const actor of this.actors) {
+              actor.setupWeapon(unarmed, testOptions()).then(test => test.roll());
+            }
+          }
         },
         {
           name: game.i18n.localize('SHEET.Dodge'),
-          value: 'dodge'
+          value: 'dodge',
+          onClick: () => {
+            for (const actor of this.actors) {
+              actor.setupSkill(game.i18n.localize("NAME.Dodge"), testOptions()).then(test => test.roll());
+            }
+          }
         },
         {
           name: game.i18n.localize('SHEET.Improvised'),
-          value: 'improv'
+          value: 'improv',
+          onClick: () => {
+            let improv = game.wfrp4e.config.systemItems.improv;
+            for (const actor of this.actors) {
+              actor.setupWeapon(improv, testOptions()).then(test => test.roll());
+            }
+          }
         },
         {
           name: game.i18n.localize('SHEET.Stomp'),
-          value: 'stomp'
+          value: 'stomp',
+          onClick: () => {
+            let stomp = game.wfrp4e.config.systemItems.stomp;
+            for (const actor of this.actors) {
+              actor.setupTrait(stomp, testOptions()).then(test => test.roll());
+            }
+          }
         }
       ];
 
@@ -324,7 +443,7 @@ Hooks.once('tokenActionHudCoreApiReady', async (coreModule) => {
         actionsData.push({
           id: action.value,
           name: action.name,
-          encodedValue: [actionType, action.value].join(this.delimiter)
+          onClick: action.onClick
         })
       }
 
@@ -357,7 +476,7 @@ Hooks.once('tokenActionHudCoreApiReady', async (coreModule) => {
 
       for (let [key, item] of this.items) {
         if (item.type !== 'weapon' && item.type !== 'forien-armoury.grimoire') continue;
-        if (!this.#displayUnequipped && !item.equipped) continue;
+        if (!this.#displayUnequipped && !item.system.isEquipped) continue;
 
         let icons = this.#getItemIcons(item);
         let action = this.#makeActionFromItem(item, actionTypeName, actionType, icons);
@@ -376,6 +495,7 @@ Hooks.once('tokenActionHudCoreApiReady', async (coreModule) => {
       for (let [key, item] of this.talents) {
         if (item.type !== 'trait') continue;
         if (!item.rollable?.value) continue;
+        if (!item.system.enabled) continue;
 
         let action = this.#makeActionFromItem(item, actionTypeName, actionType);
         actionsData.push(action);
@@ -567,28 +687,45 @@ Hooks.once('tokenActionHudCoreApiReady', async (coreModule) => {
       if (conditions.length === 0) return;
 
       const actions = conditions.map((condition) => {
-        const id = condition.id;
-        const name = game.i18n.localize(condition.label) ?? game.i18n.localize(condition.name);
         const actionTypeName = `${coreModule.api.Utils.i18n(tah.actions[actionType])}: ` ?? '';
-        const listName = `${actionTypeName}${name}`;
-        const encodedValue = [actionType, id].join(this.delimiter);
-        const effect = this.actor.effects.find(effect => effect.statuses.some(status => status === id) && !effect?.disabled);
-        const active = effect ? ' active' : '';
-        const info1 = this.#getConditionInfo(condition, effect);
-        const icon1 = this.#getConditionIcon(condition, effect);
-        const cssClass = `toggle${active}`;
-        const img = coreModule.api.Utils.getImage(condition);
-        const tooltip = this.#getConditionTooltipData(id);
+        let info1 = '';
+        let icon1 = ' ';
+        let cssClass = 'toggle';
+
+        if (this.actor) {
+          const effect = this.actor.effects.find(effect => effect.statuses.some(status => status === condition.id) && !effect?.disabled);
+          const active = effect ? ' active' : '';
+          info1 = this.#getConditionInfo(condition, effect);
+          icon1 = this.#getConditionIcon(condition, effect);
+          cssClass = `toggle${active}`;
+        }
+
         return {
-          id,
-          name,
-          encodedValue,
-          img,
+          id: condition.id,
+          name: game.i18n.localize(condition.label) ?? game.i18n.localize(condition.name),
+          img: coreModule.api.Utils.getImage(condition),
           cssClass,
-          listName,
-          tooltip,
+          listName: `${actionTypeName}${name}`,
+          tooltip: this.#getConditionTooltipData(condition.id),
           info1,
-          icon1
+          icon1,
+          onClick: async () => {
+            for (const actor of this.actors) {
+              if (condition.system.condition.value == null) {
+                if (actor.hasCondition(condition.id))
+                  await actor.removeCondition(condition.id)
+                else
+                  await actor.addCondition(condition.id)
+              } else {
+                if (this.isRightClick)
+                  await actor.removeCondition(condition.id)
+                else
+                  await actor.addCondition(condition.id)
+              }
+            }
+
+            return Hooks.callAll('forceUpdateTokenActionHud');
+          }
         }
       });
 
@@ -807,22 +944,20 @@ Hooks.once('tokenActionHudCoreApiReady', async (coreModule) => {
       const char = await this.#buildUtilityCharacter();
       const token = await this.#buildUtilityToken();
       const actionType = 'utility';
-      let actionData = mergeObject(combat, char);
-      actionData = mergeObject(actionData, token);
-
+      const actionData = {...combat, ...char, ...token};
 
       for (let group in actionData) {
         const types = actionData[group];
-        const actions = Object.entries(types).map((type) => {
-          const id = type[1].id;
-          const name = type[1].name;
+        const actions = Object.values(types).map(action => {
+          const id = action.id;
+          const name = action.name;
+          const onClick = action.onClick;
           const actionTypeName = `${coreModule.api.Utils.i18n(tah.actions[actionType])}: ` ?? '';
           const listName = `${actionTypeName}${name}`;
-          const encodedValue = [actionType, id].join(this.delimiter);
           const info1 = {};
           let cssClass = '';
 
-          if (type[0] === 'initiative' && game.combat) {
+          if (id === 'initiative' && game.combat) {
             const tokenIds = canvas.tokens.controlled.map((token) => token.id);
             const combatants = game.combat.combatants.filter((combatant) => tokenIds.includes(combatant.tokenId));
 
@@ -840,7 +975,7 @@ Hooks.once('tokenActionHudCoreApiReady', async (coreModule) => {
           return {
             id,
             name,
-            encodedValue,
+            onClick,
             info1,
             cssClass,
             listName
@@ -854,11 +989,44 @@ Hooks.once('tokenActionHudCoreApiReady', async (coreModule) => {
 
     async #buildUtilityCombat() {
       const combatTypes = {
-        initiative: {id: 'initiative', name: game.i18n.localize('tokenActionHud.wfrp4e.actions.rollInitiative')},
-        endTurn: {id: 'endTurn', name: game.i18n.localize('tokenActionHud.endTurn')}
+        initiative: {
+          id: 'initiative',
+          name: game.i18n.localize('tokenActionHud.wfrp4e.actions.rollInitiative'),
+          onClick: async () => {
+            for (const actor of this.actors) {
+              await actor.rollInitiative({createCombatants: true});
+            }
+
+            return Hooks.callAll('forceUpdateTokenActionHud');
+          }
+        },
+        endTurn: {
+          id: 'endTurn',
+          name: game.i18n.localize('tokenActionHud.endTurn'),
+          onClick: () => {
+            if (game.combat?.current?.tokenId === this.token?.id)
+              return game.combat?.nextTurn();
+          }
+        },
+        increaseAdvantage: {
+          id: 'increaseAdvantage',
+          name: game.i18n.localize('tokenActionHud.wfrp4e.actions.increaseAdvantage'),
+          onClick: () => {
+            for (const actor of this.actors)
+              actor.modifyAdvantage(1);
+          }
+        },
+        decreaseAdvantage: {
+          id: 'decreaseAdvantage',
+          name: game.i18n.localize('tokenActionHud.wfrp4e.actions.decreaseAdvantage'),
+          onClick: () => {
+            for (const actor of this.actors)
+              actor.modifyAdvantage(-1);
+          }
+        }
       }
 
-      if (!game.combat || game.combat?.current?.tokenId !== this.token?.id) delete combatTypes.endTurn
+      if (!this.actor || !game.combat || game.combat?.current?.tokenId !== this.token?.id) delete combatTypes.endTurn
 
       return {'combat': combatTypes};
     }
@@ -866,19 +1034,80 @@ Hooks.once('tokenActionHudCoreApiReady', async (coreModule) => {
 
     async #buildUtilityCharacter() {
       const characterTypes = {
-        restRecover: {id: 'restRecover', name: game.i18n.localize('tokenActionHud.wfrp4e.actions.restRecover')},
-        incomeRoll: {id: 'incomeRoll', name: game.i18n.localize('tokenActionHud.wfrp4e.actions.incomeRoll')},
+        restRecover: {
+          id: 'restRecover',
+          name: game.i18n.localize('tokenActionHud.wfrp4e.actions.restRecover'),
+          onClick: async () => {
+            for (const actor of this.actors) {
+              let skill = actor.itemTypes.skill.find(s => s.name === game.i18n.localize("NAME.Endurance"));
+              let options = foundry.utils.mergeObject(testOptions(), {rest: true, tb: actor.characteristics.t.bonus});
+
+              if (skill)
+                actor.setupSkill(skill, options).then(setupData => actor.basicTest(setupData));
+              else
+                actor.setupCharacteristic("t", options).then(setupData => actor.basicTest(setupData))
+            }
+          }
+        },
+        incomeRoll: {
+          id: 'incomeRoll',
+          name: game.i18n.localize('tokenActionHud.wfrp4e.actions.incomeRoll'),
+          onClick: async () => {
+            for (const actor of this.actors) {
+              const career = actor.currentCareer;
+              if (!career) continue;
+              const incomeSkill = career.skills[career.incomeSkill[0]];
+
+              if (!incomeSkill || !actor.items.some(i => i.type === 'skill' && i.name === incomeSkill)) {
+                ui.notifications.error(game.i18n.localize("SHEET.SkillMissingWarning"));
+                continue;
+              }
+
+              const options = foundry.utils.mergeObject(testOptions(), {
+                title: `${incomeSkill} - ${game.i18n.localize("Income")}`,
+                income: actor.details.status,
+                career: career.toObject()
+              });
+
+              actor.setupSkill(incomeSkill, options).then(setupData => {actor.basicTest(setupData)});
+            }
+          }
+        },
       }
 
       if (game.modules.get('forien-armoury')?.active) {
         characterTypes.checkCareer = {
           id: 'checkCareer',
-          name: game.i18n.localize('tokenActionHud.wfrp4e.actions.checkCareer')
+          name: game.i18n.localize('tokenActionHud.wfrp4e.actions.checkCareer'),
+          onClick: () => {
+            const api = game.modules.get('forien-armoury')?.api;
+            if (!api) return;
+
+            for (const actor of this.actors) {
+              api.checkCareers.checkCareer(actor);
+            }
+          }
         };
         characterTypes.checkEquipment = {
           id: 'checkEquipment',
-          name: game.i18n.localize('tokenActionHud.wfrp4e.actions.checkEquipment')
+          name: game.i18n.localize('tokenActionHud.wfrp4e.actions.checkEquipment'),
+          onClick: () => {
+            const api = game.modules.get('forien-armoury')?.api;
+            if (!api) return;
+
+            for (const actor of this.actors) {
+              api.itemRepair.checkInventoryForDamage(actor);
+            }
+          }
         };
+      }
+
+      if (game.user.isGM && (this.actors.length > 1 || this.actor?.type === 'character')) {
+        characterTypes.awardXP = {
+          id: 'awardXP',
+          name: game.i18n.localize('tokenActionHud.wfrp4e.actions.awardXP.awardXP'),
+          onClick: () => awardXP(this.actors)
+        }
       }
 
       return {'character': characterTypes};
@@ -887,17 +1116,69 @@ Hooks.once('tokenActionHudCoreApiReady', async (coreModule) => {
     async #buildUtilityToken() {
       const tokenTypes = {}
 
-      if (this.token && game.modules.get('item-piles')?.active && game.user.isGM) {
-        if (this.token.document.flags && this.token.document.flags['item-piles']?.data.enabled) {
-          tokenTypes.makeItemPile = {
-            id: 'revertItemPile',
-            name: game.i18n.localize('tokenActionHud.wfrp4e.actions.revertItemPile')
-          };
+      if (!this.tokens)
+        return tokenTypes;
+
+      if (game.modules.get('item-piles')?.active && game.user.isGM) {
+        if (this.token) {
+          if (this.token.document.flags && this.token.document.flags['item-piles']?.data.enabled) {
+            tokenTypes.makeItemPile = {
+              id: 'revertItemPile',
+              name: game.i18n.localize('tokenActionHud.wfrp4e.actions.revertItemPile'),
+              onClick: () => {
+                if (!game.modules.get('item-piles')?.active) return;
+
+                for (const token of this.tokens) {
+                  game.itempiles?.API?.revertTokensFromItemPiles([token]);
+                }
+              }
+            };
+          } else {
+            tokenTypes.makeItemPile = {
+              id: 'makeItemPile',
+              name: game.i18n.localize('tokenActionHud.wfrp4e.actions.makeItemPile'),
+              onClick: () => {
+                if (!game.modules.get('item-piles')?.active) return;
+
+                for (const token of this.tokens) {
+                  game.itempiles?.API?.turnTokensIntoItemPiles([token]);
+                }
+              }
+            };
+          }
         } else {
-          tokenTypes.makeItemPile = {
-            id: 'makeItemPile',
-            name: game.i18n.localize('tokenActionHud.wfrp4e.actions.makeItemPile')
+          tokenTypes.toggleItemPiles = {
+            id: 'toggleItemPiles',
+            name: game.i18n.localize('tokenActionHud.wfrp4e.actions.toggleItemPiles'),
+            onClick: () => {
+              if (!game.modules.get('item-piles')?.active) return;
+
+              for (const token of this.tokens) {
+                if (token.document.flags['item-piles']?.data.enabled)
+                  game.itempiles?.API?.revertTokensFromItemPiles([token]);
+                else
+                  game.itempiles?.API?.turnTokensIntoItemPiles([token]);
+              }
+            }
           };
+        }
+      }
+
+      if (game.user.isGM) {
+        tokenTypes.toggleDisposition = {
+          id: 'toggleDisposition',
+          name: game.i18n.localize('tokenActionHud.wfrp4e.actions.toggleDisposition'),
+          onClick: () => {
+            const dispositions = Object.values(CONST.TOKEN_DISPOSITIONS);
+
+            for (const token of this.tokens) {
+              let disposition = token.document.disposition;
+              let index = dispositions.indexOf(disposition);
+              index = (index + 1) % dispositions.length
+              disposition = dispositions[index];
+              token.document.update({disposition});
+            }
+          }
         }
       }
 
@@ -1162,12 +1443,12 @@ Hooks.once('tokenActionHudCoreApiReady', async (coreModule) => {
 
       switch (item.type) {
         case 'weapon':
-          icon1 = (item.equipped) ? iconWeaponEquipped : null;
+          icon1 = (item.system.isEquipped) ? iconWeaponEquipped : null;
           if (this.#isWeaponLoadable(item))
             icon2 = this.#isWeaponLoaded(item) ? iconWeaponLoaded : iconWeaponNotLoaded;
           break;
         case 'forien-armoury.grimoire':
-          icon1 = (item.equipped) ? iconWeaponEquipped : null;
+          icon1 = (item.system.isEquipped) ? iconWeaponEquipped : null;
           break;
         case 'armour':
         default:

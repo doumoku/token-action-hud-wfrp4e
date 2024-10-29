@@ -2,6 +2,7 @@ import {DEFAULTS} from './defaults.mjs'
 import {ActionHandlerWfrp4e} from "./ActionHandler.mjs";
 import {RollHandlerWfrp4e} from "./RollHandler.mjs";
 import {registerSettingsCoreUpdate} from "./settings.mjs";
+import {constants} from "./constants.mjs";
 
 export let SystemManagerWfrp4e = null
 
@@ -72,6 +73,34 @@ Hooks.once('tokenActionHudCoreApiReady', async (coreModule) => {
      */
     async registerDefaults () {
       return DEFAULTS;
+    }
+
+    /**
+     * @todo should be async, but async leads to errors
+     *
+     * @returns {{darkRed: {file: string, name: string, primaryColor: string, moduleId: string, class: string, tertiaryColor: string, secondaryColor: string}, brown: {file: string, name: string, primaryColor: string, moduleId: string, class: string, tertiaryColor: string, secondaryColor: string}}}
+     */
+    registerStyles() {
+      return {
+        darkRed: {
+          class: "tah-style-wfrp4e-dark-red",
+          file: "wfrp4e-dark-red",
+          moduleId: constants.moduleId,
+          name: "WFRP4e Dark Red",
+          primaryColor: "#dddddd",
+          secondaryColor: "#dddddd80",
+          tertiaryColor: "#ff6400"
+        },
+        brown: {
+          class: "tah-style-wfrp4e-brown",
+          file: "wfrp4e-brown",
+          moduleId: constants.moduleId,
+          name: "WFRP4e Brown",
+          primaryColor: "#dddddd",
+          secondaryColor: "#dddddd80",
+          tertiaryColor: "#ff6400"
+        }
+      }
     }
   }
 })

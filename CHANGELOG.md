@@ -1,5 +1,33 @@
 # Changelog
 
+## v3.0.1
+* Inactive Traits are now no longer added to Combat Actions
+
+## v3.0.0
+* Updated code for compatibility with TAH Core 2.0
+* Moved styling to separate Style called `WFRP4e Dark Red`
+* Added new style called `WFRP4e Brown`
+* Added new Utility Actions
+  * Token Action "Toggle Disposition" which will cycle dispositions for all selected Tokens
+  * Character Action "Award XP" which will award XP to all selected Characters
+  * 2 Combat Actions to modify Advantage of selected Actors
+* Added Multiple Token support for the following Actions:
+  * Characteristics 
+  * Basic Skills - skill appears if it's Basic and all selected Tokens have it
+  * Extended Tests - test appears if all selected Tokens have an Extended Test of the same name
+  * Basic Combat Actions
+  * Conditions
+  * Utility Actions - Rolling for Initiative, Rest & Recovery, Rolling for Income, actions from Forien's Armoury and Item Piles
+
+## v2.1.2
+* Added Effect for `Additional Action` to prevent advantage being added via GM Toolkit
+* Fixed `Additional Effort` applying outdated Effect (flags-based instead of Data Model based)
+* Fixed `Additional Effort` not preventing advantage
+
+## v2.1.1
+* Fix displaying unequipped weapons with setting disabled.
+* Fix Additional Effort Value Dialog after it's API changed.
+
 ## v2.1.0
 * Re-added container's `carries` value
 * Added support for Test Independent Effects (thanks to silentmark)
